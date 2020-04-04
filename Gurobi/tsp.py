@@ -6,7 +6,7 @@ import gurobipy as gp
 from gurobipy import GRB
 
 
-n=10
+n=20
 
 # Callback - use lazy constraints to eliminate sub-tours
 def subtourelim(model, where):
@@ -55,12 +55,30 @@ def creat_data(show_plot):
         import matplotlib.pyplot as plt
         plt.scatter([point[0] for point in points],[point[1] for point in points])
         plt.show()
-    return dist
+    return points,dist
+
+
+def plot_result(points, tour):
+    import matplotlib.pyplot as plt
+    plt.scatter([point[0] for point in points], [point[1] for point in points],color='blue')
+    tour.append(tour[0])
+    for index in range(len(tour)):
+        if index == len(tour) - 1:
+            break
+        plt.plot(
+            [points[tour[index]][0], points[tour[index+1]][0]],
+            [points[tour[index]][1], points[tour[index + 1]][1]],
+            color='red'
+        )
+    plt.savefig("tsp_{}_result.png".format(n))
+    plt.show()
+
+
 
 def build_model(dist):
     m = gp.Model()
     # Create variables
-    vars = m.addVars(dist.keys(), obj=dist, lb=0, ub=1, name='x')
+    vars = m.addVars(dist.keys(), obj=dist, vtype=GRB.BINARY, name='x')
     for i, j in vars.keys():
         vars[j, i] = vars[i, j]  # edge in opposite direction
     m.modelSense = GRB.MINIMIZE
@@ -75,7 +93,6 @@ def build_model(dist):
     # Add degree-2 constraint
 
     m.addConstrs((vars.sum(i, '*') == 2 for i in range(n)), "city")
-    m.update()
     # Using Python looping constructs, the preceding would be...
     #
     # for i in range(n):
@@ -100,6 +117,8 @@ def solve_model(m, vars):
     print('Optimal tour: %s' % str(tour))
     print('Optimal cost: %g' % m.objVal)
     print('')
+    return tour
+
 
 
 def solve_model1(m,vars):
@@ -115,7 +134,8 @@ def solve_model1(m,vars):
 
 
 if __name__ == "__main__":
-    dist = creat_data(False)
+    points, dist = creat_data(False)
     model,vars = build_model(dist)
-    #solve_model(model,vars)
-    solve_model1(model,vars)
+    tour = solve_model(model,vars)
+    #solve_model1(model,vars)
+    plot_result(points, tour)

@@ -22,7 +22,7 @@ for row in range(len(A_matrix)):
 
 model.addConstrs(((sum(A_matrix[row][col]*vars[col] for col in range(len(var_cost))) <= b[row]) for row in range(len(A_matrix))),"cons")
 
-model.write('models/lp.lp')
+model.write('lp.lp')
 model.optimize()
 print("optimial objection:",model.objval)
 print("x",model.getAttr('x',model.getVars()))
