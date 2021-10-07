@@ -4,9 +4,9 @@ import random
 from itertools import combinations
 import gurobipy as gp
 from gurobipy import GRB
+from time import *
 
-
-n=20
+n=200
 
 # Callback - use lazy constraints to eliminate sub-tours
 def subtourelim(model, where):
@@ -42,6 +42,21 @@ def subtour(edges):
             cycle = thiscycle
     return cycle
 
+#Given a tuplelist of edges, find all the subtour
+def find_all_subtour(edges):
+    unvisited = list(range(n))
+    cycles=[]
+    while unvisited:
+        current_cycle=[]
+        neighbors = unvisited
+        while neighbors:
+            current = neighbors[0]
+            current_cycle.append(current)
+            unvisited.remove(current)
+            neighbors = [j for i,j in edges.select(current,'*') if j in unvisited]
+        cycles.append(current_cycle)
+    return cycles
+
 
 def creat_data(show_plot):
     # Create n random points
@@ -70,9 +85,8 @@ def plot_result(points, tour):
             [points[tour[index]][1], points[tour[index + 1]][1]],
             color='red'
         )
-    plt.savefig("tsp_{}_result.png".format(n))
+    plt.savefig("Gurobi/pics/tsp_{}_result.png".format(n))
     plt.show()
-
 
 
 def build_model(dist):
@@ -97,15 +111,18 @@ def build_model(dist):
     #
     # for i in range(n):
     #   m.addConstr(sum(vars[i,j] for j in range(n)) == 2)
-    m.write('tsp.lp')
-    return m,vars
+    m.write('Gurobi/models/tsp.lp')
+    return m, vars
 
 
 def solve_model(m, vars):
     # Optimize model
     m._vars = vars
     m.Params.lazyConstraints = 1
+    begin_time = time()
     m.optimize(subtourelim)
+    end_time = time()
+    print("run time of linear:", end_time - begin_time)
     #m.optimize()
 
     vals = m.getAttr('x', vars)
@@ -120,14 +137,43 @@ def solve_model(m, vars):
     return tour
 
 
+def build_model_linear(dist):
+    m = gp.Model()
+    # Create variables
+    vars = m.addVars(dist.keys(), obj=dist, vtype=GRB.CONTINUOUS, name='x')
+    for i, j in vars.keys():
+        vars[j, i] = vars[i, j]  # edge in opposite direction
+    m.modelSense = GRB.MINIMIZE
 
-def solve_model1(m,vars):
+    m.addConstrs((vars.sum(i, '*') == 2 for i in range(n)), "city")
+    m.addConstrs((vars[i,j] <= 1 for i,j in vars.keys()),"x")
+    m.addConstrs((vars[i,j] >=0 for i,j in vars.keys()),"x")
+
+
+    m.write('Gurobi/models/tsp_linear.lp')
+    return m,vars
+
+def solve_model_linear(m,vars):
+    print("solving...")
+    begin_time = time()
     m.optimize()
-    vals = m.getAttr('x',vars)
-    print(len(vals.keys()))
-    for i,j in vars.keys():
-        if vars[i,j].x > 0 and i > j:
-            print("(",i,",",j,"):",vars[i,j].x)
+    end_time = time()
+    print("run time of linear:",end_time-begin_time)
+    # vals = m.getAttr('x',vars)
+    # print(len(vals.keys()))
+    # for i,j in vars.keys():
+    #     if vars[i,j].x > 0 and i > j:
+    #         print("(",i,",",j,"):",vars[i,j].x)
+    vals = m.getAttr('x', vars)
+    selected = gp.tuplelist((i, j) for i, j in vals.keys() if vals[i, j] > 0.5)
+
+    #tour = subtour(selected)
+    tour = find_all_subtour(selected)
+    print('')
+    print('Optimal tour: %s' % str(tour))
+    print('Optimal cost: %g' % m.objVal)
+    print('')
+    return tour
 
 
 
@@ -135,7 +181,10 @@ def solve_model1(m,vars):
 
 if __name__ == "__main__":
     points, dist = creat_data(False)
-    model,vars = build_model(dist)
-    tour = solve_model(model,vars)
-    #solve_model1(model,vars)
-    plot_result(points, tour)
+    #model,vars = build_model(dist)
+    #tour = solve_model(model,vars)
+    #plot_result(points, tour)
+    model,vars = build_model_linear(dist)
+    tour = solve_model_linear(model,vars)
+    # print(tour)
+    #plot_result(points,tour)
