@@ -40,23 +40,47 @@ class Model:
 
     def get_obj(self):
         obj = 0
-        assignment = self.assignment
-        assignment[assignment <= 0.9999] = 0
-        obj += np.sum(np.dot(self.task_profit, assignment))
+        assignment = self.feasible_solution
+        if not self.check_solution():
+            print("solution is not feasible")
+            return obj
+        obj += np.sum(np.multiply(assignment, self.task_profit))
         return obj
 
     def check_solution(self):
         for i in range(self.task_num):
             if np.sum(self.feasible_solution[:, i]) > 1:
                 return False
-
-        if np.sum(np.multiply(self.task_cost, self.feasible_solution) > self.worker_capacity) > 0:
+        if np.sum(np.dot(self.task_cost, self.feasible_solution.T) > self.worker_capacity) > 0:
             return False
 
         return True
 
     def gen_feasible_solution(self):
-        pass
+        # worker身上超过负荷
+        task_cost_dict = {idx: self.task_cost[idx] for idx in range(self.task_num)}
+        task_cost_dict = sorted(task_cost_dict.items(), key=lambda item: item[1])
+        for j in range(self.worker_num):
+            if np.dot(self.task_cost, self.feasible_solution[j, :]) <= self.worker_capacity[j]:
+                continue
+            overload_num = np.dot(self.task_cost, self.feasible_solution[j, :]) - self.worker_capacity[j]
+            cumsum = 0
+            for item in task_cost_dict:
+                if self.feasible_solution[j, item[0]] > 0:
+                    cumsum += self.task_cost[item[0]]
+                    if cumsum >= overload_num:
+                        self.feasible_solution[j, item[0]] = 0
+                        break
+        # 一个任务被分派多次
+        for i in range(self.task_num):
+            if np.sum(self.feasible_solution[:, i]) > 1:
+                overmatch_num = np.sum(self.feasible_solution[:, i]) - 1
+                for j in range(self.worker_num):
+                    if self.feasible_solution[j, i] > 0:
+                        self.feasible_solution[j, i] = 0
+                        overmatch_num -= 1
+                        if overmatch_num == 0:
+                            break
 
     def show_solution(self):
         for i in range(self.task_num):
@@ -80,11 +104,13 @@ class Model:
                 self.assignment = self.feasible_solution.copy()
                 break
             self.gen_feasible_solution()
+            print("iter num:", _iter, ", obj:", self.get_obj())
             self.update_magic_value()
             self.print_importance_info()
-        self.show_solution()
 
 
 task_info = pd.read_csv("TASK_1000.csv")
 worker_info = pd.read_csv("WORKER_10.csv")
 model = Model(task_info, worker_info)
+param_dict = {'iter_num': 100}
+model.solve(param_dict)
